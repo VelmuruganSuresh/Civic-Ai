@@ -1,0 +1,22 @@
+# --- Dependencies (Huge folder, do not push) ---
+node_modules/
+/.pnp
+.pnp.js
+
+# --- Testing ---
+/coverage
+
+# --- Production Build ---
+/build
+/dist
+
+# --- Environment Variables ---
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# --- OS Junk ---
+.DS_Store
+Thumbs.db

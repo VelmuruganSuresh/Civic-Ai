@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  # 1. THE AI BACKEND SERVICE
+  backend:
+    build: ./Civic-Ai  # Path to your backend folder
+    container_name: civic_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - MONGO_URL=mongodb+srv://velmurugan812415_db_user:vel123@cluster1.mcrregu.mongodb.net/?retryWrites=true&w=majority
+      - GEMINI_API_KEY=AIzaSyA7Q_BorT6HjTOfvQOXL0IwJA5Uu_IqEPU
+      - MAIL_USERNAME=velmurugan812415@gmail.com
+      - MAIL_PASSWORD=ntup xmbl evvs qcmt
+      - GOOGLE_CLIENT_ID=391631598516-jtm84pksc6ns5i12lorq086pi5ebjuno.apps.googleusercontent.com
+    volumes:
+      - ./Civic-Ai/static/uploads:/app/static/uploads # Persist images
+
+  # 2. THE REACT FRONTEND SERVICE
+  frontend:
+    build: ./citizen_app/citizen_app # Path to your frontend folder
+    container_name: civic_frontend
+    ports:
+      - "3000:80" # Map container port 80 to your laptop port 3000
+    depends_on:
+      - backend

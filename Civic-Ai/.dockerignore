@@ -1,0 +1,20 @@
+# --- Virtual Environment ---
+.venv/
+venv/
+
+# --- Python Cache ---
+__pycache__/
+*.pyc
+
+# --- Secrets ---
+.env
+
+# --- IGNORE RAW IMAGES (Too big) ---
+data/images/
+
+# --- BUT KEEP THESE (Critical for App) ---
+!data/rag_store.npz
+!data/rag_docs/
+
+# --- IGNORE UPLOADED COMPLAINT IMAGES ---
+static/uploads/

@@ -1,0 +1,36 @@
+# --- Virtual Environment (Keep these ignored) ---
+.venv/
+venv/
+env/
+
+# --- Python Cache ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# --- SECRETS (CRITICAL: ADD THIS) ---
+# Prevents your API Keys and Passwords from leaking
+.env
+
+# --- VSCode ---
+.vscode/
+
+# --- System ---
+.DS_Store
+Thumbs.db
+
+# --- DATA & MODELS ---
+# 1. Ignore the huge folder of raw training images
+data/images/
+
+# 2. BUT... Do NOT ignore the RAG file (We need this!)
+!data/rag_store.npz
+
+# 3. Ignore random model checkpoints
+*.ckpt
+*.safetensors
+
+# 4. BUT... Do NOT ignore your trained PyTorch model (We need this!)
+# (Remove *.pth from the ignore list, or explicitly allow this one)
+!models/vision/best.pth
