@@ -33,7 +33,7 @@ ENV PYTHONPATH=/app/src
 RUN mkdir -p static/uploads
 
 # 8. Expose the port the app runs on
-EXPOSE 8000
+EXPOSE 7860
 
 # 9. Command to run the application
-CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "7860"]

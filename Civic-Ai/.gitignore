@@ -22,7 +22,7 @@ Thumbs.db
 
 # --- DATA & MODELS ---
 # 1. Ignore the huge folder of raw training images
-data/images/
+images/
 
 # 2. BUT... Do NOT ignore the RAG file (We need this!)
 !data/rag_store.npz
