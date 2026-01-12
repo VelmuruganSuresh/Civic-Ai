@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { ToastContainer, toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
 import { API_URL } from '../services/api';
+import { ArrowLeft, Send, MapPin, Building, FileText, User } from 'lucide-react';
 
 const ReviewComplaint = () => {
   const location = useLocation();
@@ -27,37 +27,23 @@ const ReviewComplaint = () => {
     formData.append("file", imageFile);
     formData.append("username", currentUser);
     formData.append("email", currentEmail);
-    formData.append("title", aiResult.subject);
-    formData.append("description", aiResult.body);
-    formData.append("department", aiResult.department);
-    formData.append("issue_type", aiResult.issue_type);
-    formData.append("address", aiResult.address);
+    formData.append("title", aiResult.subject || "No Subject");
+    formData.append("description", aiResult.body || "No Description");
+    formData.append("department", aiResult.department || "General");
+    formData.append("issue_type", aiResult.issue_type || "Other");
+    formData.append("address", aiResult.address || "Unknown Location");
 
     try {
-      await axios.post(`${API_URL}/complaints`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      await axios.post(`${API_URL}/complaints`, formData); 
 
-      toast.success('Complaint Letter Sent Successfully!', {
-        position: "top-center",
-        autoClose: 2000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-      });
-
+      toast.success('Complaint Reported Successfully!');
       setTimeout(() => {
         navigate('/post-complaint');
-      }, 2500);
+      }, 2000);
 
     } catch (error) {
-      console.error(error);
-      
-      toast.error('Submission Failed. Please try again.', {
-        position: "top-center",
-        autoClose: 3000,
-      });
+      console.error("Submission Error:", error);
+      toast.error('Submission Failed. Please try again.');
       setIsSubmitting(false);
     } 
   };
@@ -65,46 +51,107 @@ const ReviewComplaint = () => {
   if (!aiResult) return null;
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 flex justify-center items-center">
-      
+    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <ToastContainer />
-
-      <div className="w-full max-w-lg bg-white p-6 rounded-lg shadow-xl">
-        <h1 className="text-2xl font-bold mb-4 text-center">Review Letter</h1>
+      <div className="max-w-3xl mx-auto">
         
-        {previewUrl && (
-            <div className="mb-6 flex justify-center bg-gray-50 p-2 rounded border border-dashed border-gray-300">
-                <img 
-                    src={previewUrl} 
-                    alt="Evidence" 
-                    className="h-40 object-contain rounded" 
-                />
-            </div>
-        )}
-
-        <div className="bg-gray-50 p-6 border rounded-lg mb-6 font-serif text-sm text-gray-800 shadow-inner">
-            <p className="mb-2"><strong>From:</strong> {localStorage.getItem("currentUser")}</p>
-            <p className="mb-2"><strong>To:</strong> {aiResult.department}</p>
-            <p className="mb-4"><strong>Location:</strong> {aiResult.address}</p>
-            <hr className="border-gray-300 mb-4"/>
-            <p className="mb-4 font-bold">{aiResult.subject}</p>
-            <p className="whitespace-pre-wrap leading-relaxed">{aiResult.body}</p>
+        {/* Header */}
+        <div className="mb-8 flex items-center justify-between">
+           <button 
+             onClick={() => navigate('/post-complaint')}
+             className="flex items-center text-slate-500 hover:text-slate-800 transition"
+           >
+             <ArrowLeft size={20} className="mr-2"/>
+             Back to Camera
+           </button>
+           <h1 className="text-2xl font-bold text-slate-800">Review & Submit</h1>
         </div>
 
-        <div className="flex gap-3">
-            <button 
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
+          
+          {/* Image Preview Banner */}
+          {previewUrl && (
+             <div className="h-64 w-full bg-slate-100 relative group overflow-hidden">
+               <div className="absolute inset-0 bg-black/5 group-hover:bg-black/0 transition"></div>
+               <img 
+                 src={previewUrl} 
+                 alt="Evidence" 
+                 className="w-full h-full object-contain p-4" 
+               />
+               <div className="absolute bottom-4 right-4 bg-black/70 text-white text-xs px-3 py-1 rounded-full backdrop-blur-md">
+                 Evidence Attached
+               </div>
+             </div>
+          )}
+
+          <div className="p-8">
+            <div className="flex flex-col md:flex-row gap-8">
+              
+              {/* Document Preview */}
+              <div className="flex-grow space-y-6">
+                 
+                 <div className="flex items-start gap-4 p-4 bg-indigo-50/50 rounded-xl border border-indigo-100">
+                    <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600 mt-1">
+                      <Building size={20} />
+                    </div>
+                    <div>
+                      <p className="text-xs text-indigo-500 uppercase font-bold tracking-wide mb-1">Recipient</p>
+                      <p className="font-semibold text-slate-800">{aiResult.department}</p>
+                    </div>
+                 </div>
+
+                 <div className="flex items-start gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                    <div className="bg-white p-2 rounded-lg text-slate-500 mt-1 border border-slate-100 shadow-sm">
+                      <MapPin size={20} />
+                    </div>
+                    <div>
+                      <p className="text-xs text-slate-400 uppercase font-bold tracking-wide mb-1">Detected Location</p>
+                      <p className="text-sm text-slate-700">{aiResult.address}</p>
+                    </div>
+                 </div>
+
+                 <div className="mt-8 border-t border-gray-100 pt-6">
+                    <div className="flex items-center gap-2 mb-4 text-slate-800 font-bold text-lg">
+                       <FileText size={20} className="text-indigo-600"/>
+                       <span>Formal Letter Preview</span>
+                    </div>
+                    <div className="bg-white border border-gray-200 p-6 rounded-xl shadow-sm font-serif text-slate-700 leading-relaxed text-sm md:text-base">
+                       <p className="font-bold mb-4">Subject: {aiResult.subject}</p>
+                       <p className="whitespace-pre-wrap">{aiResult.body}</p>
+                       <p className="mt-6 pt-4 border-t border-dashed border-gray-200 text-slate-500">
+                         Sincerely,<br/>
+                         <span className="font-semibold text-slate-800">{localStorage.getItem("currentUser") || "Citizen"}</span>
+                       </p>
+                    </div>
+                 </div>
+
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="mt-8 pt-6 border-t border-gray-100 flex gap-4">
+              <button 
                 onClick={() => navigate('/post-complaint')} 
-                className="flex-1 py-3 bg-gray-200 text-gray-700 font-bold rounded hover:bg-gray-300 transition"
-            >
+                className="px-6 py-3 rounded-xl border border-gray-300 text-slate-600 font-semibold hover:bg-gray-50 transition w-full md:w-auto"
+              >
                 Cancel
-            </button>
-            <button 
+              </button>
+              <button 
                 onClick={handleFinalSubmit} 
                 disabled={isSubmitting} 
-                className="flex-1 py-3 bg-green-600 text-white font-bold rounded hover:bg-green-700 transition"
-            >
-                {isSubmitting ? "Sending..." : "Send Letter ✅"}
-            </button>
+                className="px-6 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 flex-grow flex items-center justify-center gap-2 disabled:bg-indigo-300 disabled:shadow-none"
+              >
+                {isSubmitting ? (
+                   <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                ) : (
+                   <>
+                     <span>Confirm & Send</span>
+                     <Send size={18} />
+                   </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
