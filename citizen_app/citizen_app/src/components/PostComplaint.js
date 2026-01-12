@@ -4,15 +4,14 @@ import axios from "axios";
 import Swal from "sweetalert2";
 import Webcam from "react-webcam";
 import { BASE_URL } from "../services/api";
+import { Camera, RefreshCw, Send, AlertTriangle, CheckCircle, Info } from "lucide-react";
 
 const PostComplaint = () => {
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [preview, setPreview] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-
-  // This state is now used correctly in the button below
-  const [statusText, setStatusText] = useState("Analyze Image ✨");
+  const [statusText, setStatusText] = useState("Analyze Image");
 
   const webcamRef = useRef(null);
   const navigate = useNavigate();
@@ -46,18 +45,16 @@ const PostComplaint = () => {
   };
 
   const handleAnalyze = async () => {
+    // 1. Check if Image Exists (Camera Check)
     if (!selectedFile)
-      return Swal.fire(
-        "Missing Image",
-        "Please capture an image first.",
-        "warning"
-      );
+      return Swal.fire("Missing Image", "Please capture an image first.", "warning");
 
     setIsAnalyzing(true);
-    setStatusText("Requesting Location..."); // Update status 1
+    setStatusText("Requesting Location...");
 
+    // Helper function to handle the actual API call
     const sendToBackend = async (lat, long) => {
-      setStatusText("Analyzing Image..."); // Update status 2
+      setStatusText("Analyzing Image...");
       const formData = new FormData();
       formData.append("file", selectedFile);
       formData.append("lat", lat);
@@ -67,9 +64,7 @@ const PostComplaint = () => {
         const response = await axios.post(
           `${BASE_URL}/predict/image`,
           formData,
-          {
-            headers: { "Content-Type": "multipart/form-data" },
-          }
+          { headers: { "Content-Type": "multipart/form-data" } }
         );
 
         if (response.data.status === "rejected") {
@@ -80,7 +75,7 @@ const PostComplaint = () => {
             confirmButtonColor: "#F59E0B",
           });
           setIsAnalyzing(false);
-          setStatusText("Analyze Image ✨");
+          setStatusText("Analyze Image");
           return;
         }
 
@@ -93,163 +88,189 @@ const PostComplaint = () => {
         });
       } catch (error) {
         console.error(error);
-        Swal.fire("Error", "Backend is not reachable.", "error");
+        Swal.fire("Connection Error", "Could not reach the analysis server.", "error");
         setIsAnalyzing(false);
-        setStatusText("Analyze Image ✨");
+        setStatusText("Analyze Image");
       }
     };
 
+    // 2. Check Location Permission (Strict Mode)
     if (!navigator.geolocation) {
-      sendToBackend("0.0", "0.0");
-    } else {
-      navigator.geolocation.getCurrentPosition(
-        (position) =>
-          sendToBackend(position.coords.latitude, position.coords.longitude),
-        (error) => {
-          console.warn("Location denied:", error);
-          sendToBackend("0.0", "0.0");
-        },
-        { enableHighAccuracy: true }
-      );
+      Swal.fire("Error", "Geolocation is not supported by this browser.", "error");
+      setIsAnalyzing(false);
+      setStatusText("Analyze Image");
+      return;
     }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        // ✅ SUCCESS: Location found, proceed to backend
+        sendToBackend(position.coords.latitude, position.coords.longitude);
+      },
+      (error) => {
+        // ❌ ERROR: Location denied or unavailable. STOP PROCESS.
+        console.warn("Location Error:", error);
+        setIsAnalyzing(false);
+        setStatusText("Analyze Image");
+
+        let errorMessage = "Location access is required to report an issue.";
+        if (error.code === 1) {
+            errorMessage = "You denied location permission. Please allow location access in your browser settings to proceed.";
+        } else if (error.code === 2) {
+            errorMessage = "Location unavailable. Please check your GPS signal or try again.";
+        } else if (error.code === 3) {
+            errorMessage = "Location request timed out. Please try again.";
+        }
+
+        Swal.fire({
+            title: "Location Required",
+            text: errorMessage,
+            icon: "error",
+            confirmButtonText: "Okay",
+            confirmButtonColor: "#d33"
+        });
+      },
+      { 
+        enableHighAccuracy: false, // ✅ CHANGED: False prevents timeouts indoors
+        timeout: 20000,            // ✅ CHANGED: Increased to 20 seconds
+        maximumAge: 60000          // ✅ CHANGED: Accepts cached position from last 1 min
+      }
+    );
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 pb-20">
-      <div className="w-full max-w-2xl mx-auto bg-white rounded-xl shadow-lg p-6">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2 text-center">
-          Post a Complaint
-        </h1>
-        <p className="text-gray-500 text-center mb-6">
-          Capture a clear photo of the civic issue.
-        </p>
-
-        {/* CAMERA AREA */}
-        <div className="bg-black rounded-xl overflow-hidden mb-6 relative flex items-center justify-center min-h-[300px]">
-          {isCameraOpen && !preview && (
-            <>
-              <Webcam
-                audio={false}
-                ref={webcamRef}
-                screenshotFormat="image/jpeg"
-                className="w-full h-full object-cover"
-                videoConstraints={{ facingMode: "environment" }}
-              />
-              <button
-                onClick={capture}
-                className="absolute bottom-4 bg-white rounded-full p-4 shadow-lg border-4 border-gray-300 hover:border-indigo-500 transition"
-              >
-                <div className="w-4 h-4 bg-red-600 rounded-full"></div>
-              </button>
-            </>
-          )}
-
-          {preview && (
-            <img
-              src={preview}
-              alt="Captured"
-              className="w-full h-full object-contain"
-            />
-          )}
-
-          {!isCameraOpen && !preview && (
-            <div
-              className="flex flex-col items-center justify-center h-64 w-full bg-gray-100 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:bg-gray-50"
-              onClick={() => setIsCameraOpen(true)}
-            >
-              <span className="text-5xl mb-2">📷</span>
-              <span className="text-gray-500 font-medium">
-                Tap to Open Camera
-              </span>
-            </div>
-          )}
+    <div className="min-h-[calc(100vh-64px)] bg-gray-50 p-4 sm:p-6 lg:p-8">
+      <div className="max-w-4xl mx-auto">
+        <div className="text-center mb-8 animate-fade-in">
+          <h1 className="text-3xl font-extrabold text-slate-800">Report an Issue</h1>
+          <p className="text-slate-500 mt-2 max-w-2xl mx-auto">
+            Help us improve the community. Capture a photo of the civic issue. 
+            <br/>
+            <span className="text-xs text-orange-600 font-bold bg-orange-50 px-2 py-1 rounded-full border border-orange-100 mt-2 inline-block">
+               ⚠️ Location Access Required
+            </span>
+          </p>
         </div>
 
-        {/* BUTTONS */}
-        <div className="flex gap-3">
-          {preview && (
-            <button
-              onClick={handleRetake}
-              disabled={isAnalyzing}
-              className="flex-1 py-3 rounded-lg text-gray-700 font-bold bg-gray-200 hover:bg-gray-300 transition"
-            >
-              Retake 🔄
-            </button>
-          )}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          
+          {/* Main Action Area */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100 relative group min-h-[400px] flex flex-col">
+              
+              {/* Camera/Preview Container */}
+              <div className="relative flex-grow bg-slate-900 flex items-center justify-center overflow-hidden">
+                {!isCameraOpen && !preview && (
+                  <button
+                    onClick={() => setIsCameraOpen(true)}
+                    className="flex flex-col items-center justify-center group p-8 transition-transform transform hover:scale-105"
+                  >
+                    <div className="w-20 h-20 rounded-full bg-white/10 flex items-center justify-center mb-4 backdrop-blur-sm group-hover:bg-white/20 transition">
+                      <Camera size={40} className="text-white" />
+                    </div>
+                    <span className="text-white font-semibold text-lg">Tap to Start Camera</span>
+                    <span className="text-slate-400 text-sm mt-2">Ensure good lighting</span>
+                  </button>
+                )}
 
-          {preview && (
-            <button
-              onClick={handleAnalyze}
-              disabled={isAnalyzing}
-              className="flex-1 py-3 rounded-lg text-white font-bold bg-indigo-600 hover:bg-indigo-700 transition shadow-md disabled:bg-gray-400"
-            >
-              {isAnalyzing ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></span>
-                  {/* FIX: Using the variable here instead of hardcoded text */}
-                  {statusText}
-                </span>
-              ) : (
-                "Analyze Image ✨"
+                {isCameraOpen && !preview && (
+                  <>
+                    <Webcam
+                      audio={false}
+                      ref={webcamRef}
+                      screenshotFormat="image/jpeg"
+                      className="absolute inset-0 w-full h-full object-cover"
+                      videoConstraints={{ facingMode: "environment" }}
+                    />
+                    <div className="absolute bottom-6 left-0 right-0 flex justify-center z-20">
+                      <button
+                        onClick={capture}
+                        className="w-16 h-16 rounded-full border-4 border-white flex items-center justify-center shadow-lg transform active:scale-90 transition"
+                      >
+                        <div className="w-12 h-12 bg-red-500 rounded-full"></div>
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {preview && (
+                  <img
+                    src={preview}
+                    alt="Captured"
+                    className="absolute inset-0 w-full h-full object-contain bg-black"
+                  />
+                )}
+              </div>
+
+              {/* Action Bar */}
+              {preview && (
+                <div className="bg-white p-4 border-t border-gray-100 flex gap-4">
+                  <button
+                    onClick={handleRetake}
+                    disabled={isAnalyzing}
+                    className="flex-1 py-3 px-4 rounded-xl border border-gray-200 text-slate-700 font-semibold hover:bg-gray-50 transition flex items-center justify-center gap-2"
+                  >
+                    <RefreshCw size={18} />
+                    Retake
+                  </button>
+                  <button
+                    onClick={handleAnalyze}
+                    disabled={isAnalyzing}
+                    className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition shadow-lg shadow-indigo-200 flex items-center justify-center gap-2 disabled:bg-slate-300 disabled:shadow-none"
+                  >
+                    {isAnalyzing ? (
+                      <>
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        {statusText}
+                      </>
+                    ) : (
+                      <>
+                        <Send size={18} />
+                        Analyze Image
+                      </>
+                    )}
+                  </button>
+                </div>
               )}
-            </button>
-          )}
-        </div>
-
-        <div className="mt-12 pt-8 border-t border-gray-100">
-          <h3 className="text-lg font-bold text-gray-800 mb-4">
-            Submission Guidelines
-          </h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-green-50 p-4 rounded-xl border border-green-200">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="bg-green-500 text-white rounded-full p-1 w-6 h-6 flex items-center justify-center text-xs">
-                  ✓
-                </span>
-                <span className="font-bold text-green-800">Correct Format</span>
-              </div>
-              <div className="h-32 bg-gray-200 rounded-lg overflow-hidden mb-3">
-                <img
-                  src="/assets/correct-example.png"
-                  alt="Good Example"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <ul className="text-sm text-green-800 space-y-1 list-disc pl-4">
-                <li>Clear visibility of the issue.</li>
-                <li>Taken during daylight or well-lit.</li>
-                <li>Focuses on the specific problem (e.g., Garbage).</li>
-              </ul>
-            </div>
-
-            <div className="bg-red-50 p-4 rounded-xl border border-red-200">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="bg-red-500 text-white rounded-full p-1 w-6 h-6 flex items-center justify-center text-xs">
-                  ✕
-                </span>
-                <span className="font-bold text-red-800">Wrong Format</span>
-              </div>
-              <div className="h-32 bg-gray-200 rounded-lg overflow-hidden mb-3">
-                <img
-                  src="/assets/wrong-example.png"
-                  alt="Bad Example"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <ul className="text-sm text-red-800 space-y-1 list-disc pl-4">
-                <li>Blurry, dark, or normal images.</li>
-                <li>Random objects or selfies.</li>
-                <li>Images unrelated to civic issues (e.g., empty bin).</li>
-              </ul>
             </div>
           </div>
 
-          <div className="mt-6 bg-yellow-50 p-4 rounded-lg border border-yellow-200 text-sm text-yellow-800">
-            <strong>⚠️ Note:</strong> Uploading irrelevant or fake images
-            repeatedly may lead to account suspension. Please use this platform
-            responsibly.
+          {/* Sidebar Guidelines */}
+          <div className="lg:col-span-1 space-y-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4">
+                <Info size={20} className="text-indigo-500" />
+                Submission Guidelines
+              </h3>
+              
+              <div className="space-y-4">
+                <div className="p-3 bg-green-50 rounded-lg border border-green-100">
+                  <div className="flex items-center gap-2 text-green-800 font-semibold mb-2">
+                    <CheckCircle size={16} />
+                    <span>Do's</span>
+                  </div>
+                  <ul className="text-sm text-green-700 space-y-1 list-disc list-inside">
+                    <li>Clear, well-lit photos</li>
+                    <li>Focus on the specific issue</li>
+                    <li>Show surrounding context</li>
+                  </ul>
+                </div>
+
+                <div className="p-3 bg-red-50 rounded-lg border border-red-100">
+                  <div className="flex items-center gap-2 text-red-800 font-semibold mb-2">
+                    <AlertTriangle size={16} />
+                    <span>Dont's</span>
+                  </div>
+                  <ul className="text-sm text-red-700 space-y-1 list-disc list-inside">
+                    <li> blurry or dark images</li>
+                    <li>Selfies or people's faces</li>
+                    <li>Images unrelated to civic issues</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
           </div>
+
         </div>
       </div>
     </div>

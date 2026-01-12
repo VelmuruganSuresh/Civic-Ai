@@ -1,114 +1,161 @@
-import google.generativeai as genai
 import os
+import requests
+import base64
+import json
+import time
 from dotenv import load_dotenv
-load_dotenv()
 from PIL import Image
 import io
 
-API_KEY = os.getenv("GEMINI_API_KEY")
+load_dotenv()
 
 class LLMService:
     def __init__(self):
-        try:
-            if "AIzaSy" not in API_KEY:
-                print("⚠️ CRITICAL: Missing Gemini API Key")
-                self.model = None
-            else:
-                genai.configure(api_key=API_KEY)
-                
-                self.model = genai.GenerativeModel('gemini-2.0-flash')
-                print("✅ Gemini AI Connected")
-                
-        except Exception as e:
-            print(f"❌ Gemini Config Error: {e}")
-            self.model = None
+        self.api_key = os.getenv("GEMINI_API_KEY")
+        
+        # --- MODEL PRIORITY ---
+        # Tries experimental/pro models first, falls back to stable 1.5-flash
+        self.model_priority = [
+            "gemini-2.5-pro",       
+            "gemini-2.5-flash",    
+            "gemini-2.0-flash-exp", 
+            "gemini-1.5-flash"      
+        ]
+        
+        if not self.api_key:
+            print("⚠️ CRITICAL: GEMINI_API_KEY is missing!")
+        else:
+            print(f"✅ LLM Service Ready (Mode: Direct API | Models: {len(self.model_priority)} in rotation)")
+
+    def _call_gemini(self, payload, task_name="Task"):
+        """
+        Helper to call Google API with fallback logic.
+        """
+        if not self.api_key: return None
+        
+        params = {"key": self.api_key}
+        headers = {"Content-Type": "application/json"}
+        
+        for model_name in self.model_priority:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent"
+            
+            for attempt in range(1): 
+                try:
+                    response = requests.post(
+                        url, 
+                        params=params, 
+                        headers=headers, 
+                        data=json.dumps(payload),
+                        timeout=30
+                    )
+                    
+                    if response.status_code == 200:
+                        print(f"✅ Success using {model_name}")
+                        return response.json()
+                    
+                    # If 404 (Not Found) or 429 (Limit Exceeded), switch model
+                    if response.status_code in [404, 429, 503]:
+                        print(f"⚠️ {model_name} failed ({response.status_code}). Switching...")
+                        break 
+                    
+                    print(f"❌ API Error {response.status_code}: {response.text}")
+                    return None 
+                    
+                except Exception as e:
+                    print(f"❌ Connection Error with {model_name}: {e}")
+                    break 
+        
+        print(f"❌ All models failed for {task_name}.")
+        return None
 
     def validate_image(self, image_bytes):
         """
-        Checks if the image is valid (not black/blur/irrelevant).
+        Uses Gemini to check if the image is a valid civic issue.
         """
-        if not self.model:
-            return True, "AI Validator skipped"
-
         try:
-            image = Image.open(io.BytesIO(image_bytes))
-
+            b64_image = base64.b64encode(image_bytes).decode('utf-8')
+            
             prompt = """
             You are a strict Civic Issue Validator. Analyze this image.
-            
             Does this image show a **significant** civic problem?
             
             Valid Issues (YES):
-            1. Garbage Dumps / Overflowing Bins (Must be a significant pile, not just 1 wrapper).
-            2. Potholes / Broken Roads (Must be clearly visible).
-            3. Broken Streetlights / Dangerous Wiring.
-            4. Fallen Trees blocking paths (Just grass or standing trees are NOT issues).
-            5. Water Leakage / Floods.
-            6. Dead Animals.
+            - Garbage Dumps, Potholes, Broken Lights, Fallen Trees, Water Leakage, Dead Animals.
 
             Invalid Issues (NO):
-            - Just grass, plants, or a garden.
-            - A single piece of paper or small litter on grass.
-            - Normal roads with no damage.
-            - Dark/Black images.
-            - Selfies or random objects.
+            - Grass/Plants, Single wrapper, Normal roads, Dark images, Selfies, People.
 
-            Return response strictly in this format:
+            Return strictly:
             VERDICT: [YES/NO]
             REASON: [Short explanation]
             """
 
-            response = self.model.generate_content([prompt, image])
-            text = response.text.strip()
-            
-            print(f"🔍 Gemini Validation: {text}")
+            payload = {
+                "contents": [{
+                    "parts": [
+                        {"text": prompt},
+                        {"inline_data": {"mime_type": "image/jpeg", "data": b64_image}}
+                    ]
+                }]
+            }
 
-            if "VERDICT: NO" in text:
-                reason = text.split("REASON:")[1].strip() if "REASON:" in text else "Image does not show a significant civic issue."
-                return False, reason
+            data = self._call_gemini(payload, task_name="Validation")
             
-            return True, "Valid"
+            if not data:
+                return True, "Skipped (All Models Failed)"
+
+            try:
+                text = data['candidates'][0]['content']['parts'][0]['text'].strip()
+                print(f"🔍 AI Verdict: {text}")
+                
+                if "VERDICT: NO" in text:
+                    reason = text.split("REASON:")[1].strip() if "REASON:" in text else "Invalid."
+                    return False, reason
+                return True, "Valid"
+            except (KeyError, IndexError):
+                return True, "Valid"
 
         except Exception as e:
-            print(f"❌ Image Validation Error: {e}")
-            return True, "Validation skipped due to error"
+            print(f"❌ Validation Crash: {e}")
+            return True, "Skipped"
 
-    def generate_letter(self, issue_type, department, address):
-        if not self.model:
-            print("❌ LLM skipped: Model not loaded.")
-            return f"Subject: Issue regarding {issue_type}", "Automatic generation failed."
-
-        prompt = f"""
-        You are a helpful citizen writing a formal complaint to the {department}.
-        
-        Details:
-        - Issue: {issue_type}
-        - Location: {address}
-
-        Task:
-        Write a professional complaint letter body (under 60 words).
-        Be direct and polite.
-        
-        Format your response exactly like this:
-        Subject: [Write a strong subject line here]
-        [Write the body paragraph here]
+    def generate_letter(self, issue, dept, addr):
         """
-
+        Generates a PROFESSIONAL formal letter TEMPLATE (No AI).
+        """
         try:
-            response = self.model.generate_content(prompt)
-            text = response.text
-            
-            if "Subject:" in text:
-                parts = text.split("Subject:")
-                content = parts[1].strip()
-                if "\n" in content:
-                    subject_line, body_text = content.split("\n", 1)
-                    return subject_line.strip(), body_text.strip()
-            
-            return f"Complaint regarding {issue_type}", text
-            
+            # SAFETY CHECK: Ensure variables are strings
+            issue = str(issue) if issue else "Civic Issue"
+            dept = str(dept) if dept else "Civic Authority"
+            addr = str(addr) if addr else "Unknown Location"
+
+            # Create a shorter address for the Subject line to keep it clean
+            addr_short = addr.split(',')[0] if ',' in addr else addr[:20]
+
+            # 1. Professional Subject Line
+            subject = f"URGENT: {issue} Report at {addr_short}..."
+
+            # 2. Professional Body Construction
+            body = (
+                f"To the Commissioner,\n"
+                f"{dept}.\n\n"
+                f"Subject: Formal complaint regarding {issue}.\n\n"
+                f"Respected Sir/Madam,\n\n"
+                f"I am writing to formally bring to your immediate attention a critical civic issue regarding "
+                f"{issue} observed at the following location:\n\n"
+                f"📍 {addr}\n\n"
+                "This condition poses a significant inconvenience to the residents and a potential safety hazard to the public. "
+                "The current state of infrastructure requires urgent maintenance to prevent accidents and ensure community well-being.\n\n"
+                "I respectfully request the concerned authorities to inspect the site and initiate necessary "
+                "remedial action at the earliest convenience.\n\n"
+                "Expecting a prompt resolution.\n\n"
+            )
+
+            print(f"✅ Letter Generated via Template for {issue}")
+            return subject, body
+
         except Exception as e:
-            print(f"❌ LLM Generation Error: {e}")
-            return f"Urgent: {issue_type} Reported", "Could not generate letter."
+            print(f"❌ Template Error: {e}")
+            return f"Complaint: {issue}", "Could not generate letter."
 
 llm_engine = LLMService()
